@@ -6,6 +6,7 @@ contract('DASecurityContract', function(accounts) {
     let deployedAccount = accounts[0];
     let OwnerAccount = accounts[1];
     let clientAccount = accounts[2];
+    let clientAccount2 = accounts[3];
 
     let daSecurityContract;
 
@@ -41,9 +42,11 @@ contract('DASecurityContract', function(accounts) {
         assert.equal(deployedAccountBalance.toNumber(), 0);
     });
     
-    it('Mint total supply to client account', async () => {
+    it('Successfully mint total supply to client account', async () => {
         let clientAccountBalance = await daSecurityContract.balanceOf.call(clientAccount);
         assert.equal(clientAccountBalance.toNumber(), 0);
+
+         await daSecurityContract.addAddressToWhitelist(clientAccount, { from: OwnerAccount });
 
         await daSecurityContract.mint(clientAccount, 2000, { from: OwnerAccount });
 
@@ -56,6 +59,12 @@ contract('DASecurityContract', function(accounts) {
 
     it('Mint should fail becuase who run the mint function is not ownable user anymore', (done) => {
         daSecurityContract.mint(clientAccount, 2000, { from: deployedAccount }).catch(error => {
+            done();
+        })
+    });
+
+    it('Mint should fail becuase the reciever does not exist on the whitelist', (done) => {
+        daSecurityContract.mint(clientAccount2, 2000, { from: OwnerAccount }).catch(error => {
             done();
         })
     });
@@ -86,6 +95,8 @@ contract('DASecurityContract', function(accounts) {
         let clientAccountBalance = await daSecurityContract.balanceOf.call(clientAccount);
         assert.equal(clientAccountBalance.toNumber(), 0);
 
+        await daSecurityContract.addAddressToWhitelist(clientAccount, { from: OwnerAccount });
+
         await daSecurityContract.transfer(clientAccount, 2000, { from: OwnerAccount });
 
         let clientAccountBalanceAfterTransfer = await daSecurityContract.balanceOf.call(clientAccount);
@@ -94,6 +105,64 @@ contract('DASecurityContract', function(accounts) {
 
     it('Faild to transfer because the deployed account did not has any tokens on her account', (done) => {
         daSecurityContract.transfer(clientAccount, 2000, { from: deployedAccount }).catch(error => {
+            done();
+        })
+    });
+
+    it('Faild to transfer because the reciever address does not exist on the whitelist', (done) => {
+        daSecurityContract.transfer(clientAccount2, 2000, { from: OwnerAccount }).catch(error => {
+            done();
+        })
+    });
+
+    it('Checking the whitelist addresses', async () => {
+       await daSecurityContract.addAddressToWhitelist(clientAccount, { from: OwnerAccount });
+
+       let ownerAddress = await daSecurityContract.whitelist(OwnerAccount);
+       assert.equal(ownerAddress, true);
+
+       let existAddress = await daSecurityContract.whitelist(clientAccount);
+       assert.equal(existAddress, true);
+
+       let notExistAddress = await daSecurityContract.whitelist(clientAccount2);
+       assert.equal(notExistAddress, false);
+    });
+
+    it('Faild to add client to the whitelist because who tried to run the func is not the owner', (done) => {
+        daSecurityContract.addAddressToWhitelist(clientAccount, { from: deployedAccount }).catch(error => {
+            done();
+        })
+    });
+
+    it('TransferFrom should success - the owner approved to account use 100', async () => {
+        let ownerBalance = await daSecurityContract.balanceOf.call(OwnerAccount);
+        assert.strictEqual(ownerBalance.toNumber(), 200000000);
+
+        await daSecurityContract.addAddressToWhitelist(clientAccount, { from: OwnerAccount });
+
+        await daSecurityContract.approve(clientAccount, 2000, { from: OwnerAccount });
+        let allowance = await daSecurityContract.allowance.call(OwnerAccount, clientAccount);
+        assert.strictEqual(allowance.toNumber(), 2000);
+
+        let accountBalance = await daSecurityContract.balanceOf.call(clientAccount2);
+        assert.strictEqual(accountBalance.toNumber(), 0);
+
+        // Need to set "to" address on whitelist
+        await daSecurityContract.addAddressToWhitelist(clientAccount2, { from: OwnerAccount });
+
+        await daSecurityContract.transferFrom(OwnerAccount, clientAccount2, 20, { from: clientAccount });
+        allowance = await daSecurityContract.allowance.call(OwnerAccount, clientAccount);
+        assert.strictEqual(allowance.toNumber(), 1980);
+
+        accountBalance = await daSecurityContract.balanceOf.call(clientAccount2);
+        assert.strictEqual(accountBalance.toNumber(), 20);
+
+        ownerBalance = await daSecurityContract.balanceOf.call(OwnerAccount);
+        assert.strictEqual(ownerBalance.toNumber(), 199999980);
+    });
+    
+    it('Approve should failed - the client not exist on the whitelist', (done) => {
+        daSecurityContract.approve(clientAccount, 2000, { from: OwnerAccount }).catch(error => {
             done();
         })
     });
