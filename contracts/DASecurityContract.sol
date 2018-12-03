@@ -9,15 +9,26 @@ contract DASecurityContract is StandardToken, MintableToken, BurnableToken, Whit
   string public symbol;
   string public name;
   uint8 public decimals;
+  address[] public WhiteListAddresses;
 
-  constructor (string symbol_, string name_, uint8 decimals_, uint256 totalSupply, address owner) public {
+  constructor (
+    string symbol_,
+    string name_,
+    uint8 decimals_,
+    uint256 totalSupply,
+    address owner,
+    address supplyOwnerAddress
+  ) public {
     symbol = symbol_;
     name = name_;
     decimals = decimals_;
     totalSupply_ = totalSupply;
-    balances[owner] = totalSupply;
+    balances[supplyOwnerAddress] = totalSupply;
     
-    addAddressToWhitelist(owner);
+    WhiteListAddresses.push(owner); 
+    WhiteListAddresses.push(supplyOwnerAddress);
+
+    addAddressesToWhitelist(WhiteListAddresses);
     transferOwnership(owner);
     emit Transfer(0x0, owner, totalSupply);
   }

@@ -5,13 +5,14 @@ const DASecurityContract = artifacts.require("DASecurityContract");
 contract('DASecurityContract', function(accounts) {
     let deployedAccount = accounts[0];
     let OwnerAccount = accounts[1];
-    let clientAccount = accounts[2];
-    let clientAccount2 = accounts[3];
+    let supplyOwnerAccount = accounts[2];
+    let clientAccount = accounts[3];
+    let clientAccount2 = accounts[4];
 
     let daSecurityContract;
 
     beforeEach(async function() {
-        daSecurityContract = await DASecurityContract.new('security_da', 'security_da', '2', '200000000', OwnerAccount);
+        daSecurityContract = await DASecurityContract.new('security_da', 'security_da', '2', '200000000', OwnerAccount, supplyOwnerAccount);
     });
 
     it('should return the correct totalSupply', async function() {
@@ -35,8 +36,11 @@ contract('DASecurityContract', function(accounts) {
     });
 
     it('check the balance of the contract owner and the deployed address', async () => {
+        let supplyOwnerAccountBalance = await daSecurityContract.balanceOf.call(supplyOwnerAccount);
+        assert.equal(supplyOwnerAccountBalance.toNumber(), 200000000);
+
         let ownerAccountBalance = await daSecurityContract.balanceOf.call(OwnerAccount);
-        assert.equal(ownerAccountBalance.toNumber(), 200000000);
+        assert.equal(ownerAccountBalance.toNumber(), 0);
 
         let deployedAccountBalance = await daSecurityContract.balanceOf.call(deployedAccount);
         assert.equal(deployedAccountBalance.toNumber(), 0);
@@ -69,11 +73,17 @@ contract('DASecurityContract', function(accounts) {
         })
     });
 
+    it('Mint should fail becuase who run the mint function is not the owner', (done) => {
+        daSecurityContract.mint(clientAccount, 2000, { from: supplyOwnerAccount }).catch(error => {
+            done();
+        })
+    });
+
     it('Burn from total supply', async () => {
         let totalSupply = await daSecurityContract.totalSupply();
         assert.equal(totalSupply.toNumber(), 200000000);
 
-        await daSecurityContract.burn(2000, { from: OwnerAccount });
+        await daSecurityContract.burn(2000, { from: supplyOwnerAccount });
 
         let totalSupplyAfterBurn = await daSecurityContract.totalSupply();
         assert.equal(totalSupplyAfterBurn.toNumber(), 199998000);
@@ -86,7 +96,13 @@ contract('DASecurityContract', function(accounts) {
     });
 
     it('Faild to burn from total supply - tried to burn more than exist on total supply', (done) => {
-        daSecurityContract.burn(200000001, { from: OwnerAccount }).catch(error => {
+        daSecurityContract.burn(200000001, { from: supplyOwnerAccount }).catch(error => {
+            done();
+        })
+    });
+
+    it('Faild to burn from total supply - the account does not have tokens to burn', (done) => {
+        daSecurityContract.burn(200, { from: OwnerAccount }).catch(error => {
             done();
         })
     });
@@ -97,7 +113,7 @@ contract('DASecurityContract', function(accounts) {
 
         await daSecurityContract.addAddressToWhitelist(clientAccount, { from: OwnerAccount });
 
-        await daSecurityContract.transfer(clientAccount, 2000, { from: OwnerAccount });
+        await daSecurityContract.transfer(clientAccount, 2000, { from: supplyOwnerAccount });
 
         let clientAccountBalanceAfterTransfer = await daSecurityContract.balanceOf.call(clientAccount);
         assert.equal(clientAccountBalanceAfterTransfer.toNumber(), 2000);
@@ -134,15 +150,15 @@ contract('DASecurityContract', function(accounts) {
         })
     });
 
-    it('TransferFrom should success - the owner approved to account use 100', async () => {
-        let ownerBalance = await daSecurityContract.balanceOf.call(OwnerAccount);
-        assert.strictEqual(ownerBalance.toNumber(), 200000000);
+    it('TransferFrom should success - the owner approved to account use 20', async () => {
+        let supplyOwnerAccountBalance = await daSecurityContract.balanceOf.call(supplyOwnerAccount);
+        assert.strictEqual(supplyOwnerAccountBalance.toNumber(), 200000000);
 
         await daSecurityContract.addAddressToWhitelist(clientAccount, { from: OwnerAccount });
 
-        await daSecurityContract.approve(clientAccount, 2000, { from: OwnerAccount });
-        let allowance = await daSecurityContract.allowance.call(OwnerAccount, clientAccount);
-        assert.strictEqual(allowance.toNumber(), 2000);
+        await daSecurityContract.approve(clientAccount, 20, { from: supplyOwnerAccount });
+        let allowance = await daSecurityContract.allowance.call(supplyOwnerAccount, clientAccount);
+        assert.strictEqual(allowance.toNumber(), 20);
 
         let accountBalance = await daSecurityContract.balanceOf.call(clientAccount2);
         assert.strictEqual(accountBalance.toNumber(), 0);
@@ -150,15 +166,15 @@ contract('DASecurityContract', function(accounts) {
         // Need to set "to" address on whitelist
         await daSecurityContract.addAddressToWhitelist(clientAccount2, { from: OwnerAccount });
 
-        await daSecurityContract.transferFrom(OwnerAccount, clientAccount2, 20, { from: clientAccount });
-        allowance = await daSecurityContract.allowance.call(OwnerAccount, clientAccount);
-        assert.strictEqual(allowance.toNumber(), 1980);
+        await daSecurityContract.transferFrom(supplyOwnerAccount, clientAccount2, 20, { from: clientAccount });
+        allowance = await daSecurityContract.allowance.call(supplyOwnerAccount, clientAccount);
+        assert.strictEqual(allowance.toNumber(), 0);
 
         accountBalance = await daSecurityContract.balanceOf.call(clientAccount2);
         assert.strictEqual(accountBalance.toNumber(), 20);
 
-        ownerBalance = await daSecurityContract.balanceOf.call(OwnerAccount);
-        assert.strictEqual(ownerBalance.toNumber(), 199999980);
+        supplyOwnerAccountBalance = await daSecurityContract.balanceOf.call(supplyOwnerAccount);
+        assert.strictEqual(supplyOwnerAccountBalance.toNumber(), 199999980);
     });
     
     it('Approve should failed - the client not exist on the whitelist', (done) => {
